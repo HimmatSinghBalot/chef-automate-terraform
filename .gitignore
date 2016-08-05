@@ -1,3 +1,5 @@
 terraform.tfstate
 terraform.tfstate.backup
 *.pem
+delivery-admin-credentials
+delivery.license
