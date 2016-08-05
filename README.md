@@ -19,12 +19,12 @@ A Terraform plan to build a fully functional Chef Automate cluster in AWS
 	* Run 'terraform apply --var-file=main.tfvars' to initiate the provisioning process
 
 ## Post run:
-* The process will write out the Delivery user .pem key and the Chef Org validator .pem key to the directory you ran Terraform from.
-* In the output from the Terraform run, find the end of the section where it creates the Automate server. You will see the login information the server.
+* You will find the Delivery user .pem key and the Chef Org validator .pem key in the directory you ran Terraform from.
+* The password for the user 'delivery' on the Chef Server is 'ChefDelivery2016'. You can and should change this after installation.
+* You will find the login information for the Automate server in the file delivery-admin-credentials located in the directory you ran Terraform from.
 
 ## Development TODOs:
 
 * Variablize source URLs for Chef Packages
 * DNS is entirely via AWS hostnames. This may be ok, or not.
 * Evaluate sensitive key placement. This could use some refactoring.
-* Place output from Delivery setup somewhere useful
