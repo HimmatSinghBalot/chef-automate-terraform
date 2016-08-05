@@ -1,60 +1,68 @@
 # TODO:
-# - Replace self referencing attribute lookups with 'self.x'
-# - Create a tf.vars file to hold variable values
-# - Variablize CIDR blocks in SG rules
+# * - Replace self referencing attribute lookups with 'self.x'
+# * - Create a tf.vars file to hold variable values
+# * - Variablize CIDR blocks in SG rules
 # - Variablize source URLs for Chef Packages
 # - DNS is entirely via AWS hostnames. This may be ok, or not.
-# - Create map of Ubuntu 14.04 AMIs for all regions
+# * - Create map of Ubuntu 14.04 AMIs for all regions
 # - Evaluate sensitive key placement. This could use some refactoring.
 # - Place output from Delivery setup somewhere useful
+# - Add a .gitignore to exclude state files
 # - Create README
 
 variable "prefix" {
     type = "string"
     description = "Identifying string to prefix the name of generated AWS resources"
-    default = "jbyrne"
 }
 
 variable "aws_region" {
     type = "string"
     description = "AWS region to deploy in. Ex: us-west-1"
-    default = "us-west-1"
 }
 
 variable "vpc_id" {
     type = "string"
     description = "VPC ID to deploy cluster within"
-    default = "vpc-01546164"
 }
 
 variable "subnet" {
     type = "string"
     description = "Subnet to deploy cluster within"
-    default = "subnet-b4798dd0"
+}
+
+variable "cidrs_allowed" {
+    type = "list"
+    description = "List of CIDR blocks allowed to access the automate cluster"
 }
 
 variable "ami" {
-    type = "string"
+    type = "map"
     description = "AMI ID to use for cluster instances"
-    default = "ami-48db9d28"
+    default = {
+        us-east-1 = "ami-2d39803a"
+        us-west-1 = "ami-48db9d28"
+        us-west-2 = "ami-d732f0b7"
+    }
 }
 
 variable "key_name" {
     type = "string"
     description = "AWS SSH Key Name"
-    default = "jbyrne-chef"
 }
 
 variable "key_path" {
     type = "string"
     description = "Path to SSH private key"
-    default = "../ssh_keys/jbyrne.pem"
 }
 
 variable "builder_count" {
     type = "string"
     description = "Number of Automate Builders to provision"
-    default = 2
+}
+
+variable "license_file" {
+    type = "string"
+    description = "Path to Chef Automate license file"
 }
 
 provider "aws" {
@@ -84,7 +92,7 @@ resource "aws_security_group" "chef-automate" {
         from_port = 10000
         to_port = 10003
         protocol = "tcp"
-        cidr_blocks = ["10.99.0.0/16"]
+        cidr_blocks = "${var.cidrs_allowed}"
     }
 
     # Chef Delivery Git Server
@@ -92,7 +100,7 @@ resource "aws_security_group" "chef-automate" {
         from_port = 8989
         to_port = 8989
         protocol = "tcp"
-        cidr_blocks = ["10.99.0.0/16"]
+        cidr_blocks = "${var.cidrs_allowed}"
     }
 
     # Chef Server / Automate Server HTTPS
@@ -100,7 +108,7 @@ resource "aws_security_group" "chef-automate" {
         from_port = 443
         to_port = 443
         protocol = "tcp"
-        cidr_blocks = ["10.99.0.0/16"]
+        cidr_blocks = "${var.cidrs_allowed}"
     }
 
     # Chef Server / Automate Server HTTP
@@ -108,7 +116,7 @@ resource "aws_security_group" "chef-automate" {
         from_port = 80
         to_port = 80
         protocol = "tcp"
-        cidr_blocks = ["10.99.0.0/16"]
+        cidr_blocks = "${var.cidrs_allowed}"
     }
 
     # SSH Management Access
@@ -116,7 +124,7 @@ resource "aws_security_group" "chef-automate" {
         from_port = 22
         to_port = 22
         protocol = "tcp"
-        cidr_blocks = ["10.99.0.0/16"]
+        cidr_blocks = "${var.cidrs_allowed}"
     }    
 
     egress {
@@ -129,7 +137,7 @@ resource "aws_security_group" "chef-automate" {
 
 
 resource "aws_instance" "chef-server" {
-    ami = "${var.ami}"
+    ami = "${lookup(var.ami, var.aws_region)}"
     instance_type = "c4.xlarge"
     subnet_id = "${var.subnet}"
     vpc_security_group_ids = ["${aws_security_group.chef-automate.id}"]
@@ -172,17 +180,17 @@ resource "aws_instance" "chef-server" {
     }
 
     provisioner "local-exec" {
-        command = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.chef-server.private_ip}:/home/ubuntu/delivery-user.pem ."
+        command = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${self.private_ip}:/home/ubuntu/delivery-user.pem ."
     }
 
     provisioner "local-exec" {
-        command = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.chef-server.private_ip}:/home/ubuntu/delivery-validator.pem ."
+        command = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${self.private_ip}:/home/ubuntu/delivery-validator.pem ."
     }
 }
 
 resource "aws_instance" "automate-server" {
     depends_on = ["aws_instance.chef-server"]
-    ami = "${var.ami}"
+    ami = "${lookup(var.ami, var.aws_region)}"
     instance_type = "m4.xlarge"
     subnet_id = "${var.subnet}"
     vpc_security_group_ids = ["${aws_security_group.chef-automate.id}"]
@@ -211,7 +219,7 @@ resource "aws_instance" "automate-server" {
     }
 
     provisioner "file" {
-        source = "delivery.license"
+        source = "${var.license_file}"
         destination = "/home/ubuntu/delivery.license"
     }
 
@@ -230,7 +238,7 @@ resource "aws_instance" "automate-server" {
             "sudo dpkg -i /tmp/delivery_0.5.1-1_amd64.deb",
             "sudo hostname $(hostname -f)",
             "sudo su -c 'echo $(hostname) > /etc/hostname'",
-            "sudo delivery-ctl setup --license /home/ubuntu/delivery.license --key /home/ubuntu/delivery-user.pem --server-url https://${aws_instance.chef-server.private_dns}/organizations/delivery --fqdn ${aws_instance.automate-server.private_dns} --enterprise delivery --configure --no-build-node"
+            "sudo delivery-ctl setup --license /home/ubuntu/delivery.license --key /home/ubuntu/delivery-user.pem --server-url https://${aws_instance.chef-server.private_dns}/organizations/delivery --fqdn ${self.private_dns} --enterprise delivery --configure --no-build-node"
         ]
     }
 }
@@ -238,7 +246,7 @@ resource "aws_instance" "automate-server" {
 resource "aws_instance" "automate-builder" {
     depends_on = ["aws_instance.automate-server"]
     count = "${var.builder_count}"
-    ami = "${var.ami}"
+    ami = "${lookup(var.ami, var.aws_region)}"
     instance_type = "t2.medium"
     subnet_id = "${var.subnet}"
     vpc_security_group_ids = ["${aws_security_group.chef-automate.id}"]
