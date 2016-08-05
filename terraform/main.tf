@@ -1,11 +1,3 @@
-# TODO:
-# - Variablize source URLs for Chef Packages
-# - DNS is entirely via AWS hostnames. This may be ok, or not.
-# - Evaluate sensitive key placement. This could use some refactoring.
-# - Place output from Delivery setup somewhere useful
-# - Add a .gitignore to exclude state files
-# - Create README
-
 variable "prefix" {
     type = "string"
     description = "Identifying string to prefix the name of generated AWS resources"
