@@ -229,6 +229,10 @@ resource "aws_instance" "automate-server" {
             "sudo delivery-ctl setup --license /home/ubuntu/delivery.license --key /home/ubuntu/delivery-user.pem --server-url https://${aws_instance.chef-server.private_dns}/organizations/delivery --fqdn ${self.private_dns} --enterprise delivery --configure --no-build-node"
         ]
     }
+
+    provisioner "local-exec" {
+        command = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${self.private_ip}:/etc/delivery/delivery-admin-credentials ."
+    }
 }
 
 resource "aws_instance" "automate-builder" {
@@ -268,6 +272,6 @@ resource "aws_instance" "automate-builder" {
     }
 
     provisioner "local-exec" {
-        command = "ssh -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.automate-server.private_ip} 'sudo delivery-ctl install-build-node --installer /home/ubuntu/chefdk_0.16.28-1_amd64.deb --fqdn ${self.private_dns} --username ubuntu --ssh-identity-file /home/ubuntu/ssh_key.pem --overwrite-registration --password nadanada'"
+        command = "ssh -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.automate-server.private_ip} 'sudo delivery-ctl install-build-node --installer /home/ubuntu/chefdk_0.16.28-1_amd64.deb --fqdn ${self.private_dns} --username ubuntu --ssh-identity-file /home/ubuntu/ssh_key.pem --overwrite-registration --password noreallyused'"
     }
 }
