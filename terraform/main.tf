@@ -1,10 +1,6 @@
 # TODO:
-# * - Replace self referencing attribute lookups with 'self.x'
-# * - Create a tf.vars file to hold variable values
-# * - Variablize CIDR blocks in SG rules
 # - Variablize source URLs for Chef Packages
 # - DNS is entirely via AWS hostnames. This may be ok, or not.
-# * - Create map of Ubuntu 14.04 AMIs for all regions
 # - Evaluate sensitive key placement. This could use some refactoring.
 # - Place output from Delivery setup somewhere useful
 # - Add a .gitignore to exclude state files
