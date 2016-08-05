@@ -1,3 +1,14 @@
+# TODO:
+# - Replace self referencing attribute lookups with 'self.x'
+# - Create a tf.vars file to hold variable values
+# - Variablize CIDR blocks in SG rules
+# - Variablize source URLs for Chef Packages
+# - DNS is entirely via AWS hostnames. This may be ok, or not.
+# - Create map of Ubuntu 14.04 AMIs for all regions
+# - Evaluate sensitive key placement. This could use some refactoring.
+# - Place output from Delivery setup somewhere useful
+# - Create README
+
 variable "prefix" {
     type = "string"
     description = "Identifying string to prefix the name of generated AWS resources"
@@ -43,7 +54,7 @@ variable "key_path" {
 variable "builder_count" {
     type = "string"
     description = "Number of Automate Builders to provision"
-    default = 3
+    default = 2
 }
 
 provider "aws" {
@@ -134,6 +145,13 @@ resource "aws_instance" "chef-server" {
         Name = "${var.prefix}-chef-server"
     }
 
+    connection {
+        type = "ssh"
+        user = "ubuntu"
+        agent = false
+        private_key = "${file("${var.key_path}")}"
+    }
+
     provisioner "remote-exec" {
         inline = [
             "sudo apt-get update",
@@ -142,23 +160,28 @@ resource "aws_instance" "chef-server" {
             "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/14.04/chef-server-core_12.8.0-1_amd64.deb",
             "sudo dpkg -i /tmp/chef-server-core_12.8.0-1_amd64.deb",
             "sudo hostname $(hostname -f)",
-            "sudo echo $(hostname) > /etc/hostname",
+            "sudo su -c 'echo $(hostname) > /etc/hostname'",
             "sudo chef-server-ctl reconfigure",
             "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/14.04/opscode-push-jobs-server_1.1.6-1_amd64.deb",
             "sudo dpkg -i /tmp/opscode-push-jobs-server_1.1.6-1_amd64.deb",
             "sudo chef-server-ctl reconfigure",
-            "sudo opscode-push-jobs-server-ctl reconfigure"
+            "sudo opscode-push-jobs-server-ctl reconfigure",
+            "sudo chef-server-ctl user-create delivery Delivery User delivery-user@chef.io ChefDelivery2016 --filename /home/ubuntu/delivery-user.pem",
+            "sudo chef-server-ctl org-create delivery 'Chef Delivery'  --filename /home/ubuntu/delivery-validator.pem -a delivery"
         ]
-        connection {
-            type = "ssh"
-            user = "ubuntu"
-            agent = false
-            private_key = "${file("${var.key_path}")}"
-        }
+    }
+
+    provisioner "local-exec" {
+        command = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.chef-server.private_ip}:/home/ubuntu/delivery-user.pem ."
+    }
+
+    provisioner "local-exec" {
+        command = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.chef-server.private_ip}:/home/ubuntu/delivery-validator.pem ."
     }
 }
 
 resource "aws_instance" "automate-server" {
+    depends_on = ["aws_instance.chef-server"]
     ami = "${var.ami}"
     instance_type = "m4.xlarge"
     subnet_id = "${var.subnet}"
@@ -175,26 +198,45 @@ resource "aws_instance" "automate-server" {
         Name = "${var.prefix}-automate-server"
     }
 
+    connection {
+        type = "ssh"
+        user = "ubuntu"
+        agent = false
+        private_key = "${file("${var.key_path}")}"
+    }
+
+    provisioner "file" {
+        source = "delivery-user.pem"
+        destination = "/home/ubuntu/delivery-user.pem"
+    }
+
+    provisioner "file" {
+        source = "delivery.license"
+        destination = "/home/ubuntu/delivery.license"
+    }
+
+    provisioner "file" {
+        source = "${var.key_path}"
+        destination = "/home/ubuntu/ssh_key.pem"
+    }
+
     provisioner "remote-exec" {
         inline = [
             "sudo apt-get update",
             "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
             "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/14.04/delivery_0.5.1-1_amd64.deb",
+            "sudo wget -P /home/ubuntu https://packages.chef.io/stable/ubuntu/12.04/chefdk_0.16.28-1_amd64.deb",
             "sudo dpkg -i /tmp/delivery_0.5.1-1_amd64.deb",
             "sudo hostname $(hostname -f)",
-            "sudo echo $(hostname) > /etc/hostname"
+            "sudo su -c 'echo $(hostname) > /etc/hostname'",
+            "sudo delivery-ctl setup --license /home/ubuntu/delivery.license --key /home/ubuntu/delivery-user.pem --server-url https://${aws_instance.chef-server.private_dns}/organizations/delivery --fqdn ${aws_instance.automate-server.private_dns} --enterprise delivery --configure --no-build-node"
         ]
-        connection {
-            type = "ssh"
-            user = "ubuntu"
-            agent = false
-            private_key = "${file("${var.key_path}")}"
-        }
     }
 }
 
 resource "aws_instance" "automate-builder" {
+    depends_on = ["aws_instance.automate-server"]
     count = "${var.builder_count}"
     ami = "${var.ami}"
     instance_type = "t2.medium"
@@ -212,21 +254,24 @@ resource "aws_instance" "automate-builder" {
         Name = "${var.prefix}-${format("automate-builder-%02d", count.index + 1)}"
     }
 
+    connection {
+        type = "ssh"
+        user = "ubuntu"
+        agent = false
+        private_key = "${file("${var.key_path}")}"
+    }
+
     provisioner "remote-exec" {
         inline = [
             "sudo apt-get update",
             "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
-            "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/12.04/chefdk_0.16.28-1_amd64.deb",
-            "sudo dpkg -i /tmp/chefdk_0.16.28-1_amd64.deb",
             "sudo hostname $(hostname -f)",
-            "sudo echo $(hostname) > /etc/hostname"
+            "sudo su -c 'echo $(hostname) > /etc/hostname'"
         ]
-        connection {
-            type = "ssh"
-            user = "ubuntu"
-            agent = false
-            private_key = "${file("${var.key_path}")}"
-        }
+    }
+
+    provisioner "local-exec" {
+        command = "ssh -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.automate-server.private_ip} 'sudo delivery-ctl install-build-node --installer /home/ubuntu/chefdk_0.16.28-1_amd64.deb --fqdn ${self.private_dns} --username ubuntu --ssh-identity-file /home/ubuntu/ssh_key.pem --overwrite-registration --password nadanada'"
     }
 }
