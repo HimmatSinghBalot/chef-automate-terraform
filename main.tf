@@ -140,7 +140,14 @@ resource "aws_instance" "chef-server" {
             "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
             "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/14.04/chef-server-core_12.8.0-1_amd64.deb",
-            "sudo dpkg -i /tmp/chef-server-core_12.8.0-1_amd64.deb"
+            "sudo dpkg -i /tmp/chef-server-core_12.8.0-1_amd64.deb",
+            "sudo hostname $(hostname -f)",
+            "sudo echo $(hostname) > /etc/hostname",
+            "sudo chef-server-ctl reconfigure",
+            "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/14.04/opscode-push-jobs-server_1.1.6-1_amd64.deb",
+            "sudo dpkg -i /tmp/opscode-push-jobs-server_1.1.6-1_amd64.deb",
+            "sudo chef-server-ctl reconfigure",
+            "sudo opscode-push-jobs-server-ctl reconfigure"
         ]
         connection {
             type = "ssh"
@@ -174,7 +181,9 @@ resource "aws_instance" "automate-server" {
             "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
             "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/14.04/delivery_0.5.1-1_amd64.deb",
-            "sudo dpkg -i /tmp/delivery_0.5.1-1_amd64.deb"
+            "sudo dpkg -i /tmp/delivery_0.5.1-1_amd64.deb",
+            "sudo hostname $(hostname -f)",
+            "sudo echo $(hostname) > /etc/hostname"
         ]
         connection {
             type = "ssh"
@@ -209,7 +218,9 @@ resource "aws_instance" "automate-builder" {
             "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
             "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/12.04/chefdk_0.16.28-1_amd64.deb",
-            "sudo dpkg -i /tmp/chefdk_0.16.28-1_amd64.deb"
+            "sudo dpkg -i /tmp/chefdk_0.16.28-1_amd64.deb",
+            "sudo hostname $(hostname -f)",
+            "sudo echo $(hostname) > /etc/hostname"
         ]
         connection {
             type = "ssh"
