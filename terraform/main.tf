@@ -3,6 +3,11 @@ variable "prefix" {
     description = "Identifying string to prefix the name of generated AWS resources"
 }
 
+variable "contact" {
+    type = "string"
+    description = "Owner contact info"
+}
+
 variable "aws_region" {
     type = "string"
     description = "AWS region to deploy in. Ex: us-west-1"
@@ -27,9 +32,10 @@ variable "ami" {
     type = "map"
     description = "AMI ID to use for cluster instances"
     default = {
-        us-east-1 = "ami-2d39803a"
-        us-west-1 = "ami-48db9d28"
-        us-west-2 = "ami-d732f0b7"
+        us-east-1 = "ami-6edd3078"
+        us-east-2 = "ami-fcc19b99"
+        us-west-1 = "ami-539ac933"
+        us-west-2 = "ami-7c803d1c"
     }
 }
 
@@ -43,7 +49,7 @@ variable "key_path" {
     description = "Path to SSH private key"
 }
 
-variable "builder_count" {
+variable "runner_count" {
     type = "string"
     description = "Number of Automate Builders to provision"
 }
@@ -139,6 +145,7 @@ resource "aws_instance" "chef-server" {
 
     tags {
         Name = "${var.prefix}-chef-server"
+        X-Contact = "${var.contact}"
     }
 
     connection {
@@ -153,15 +160,11 @@ resource "aws_instance" "chef-server" {
             "sudo apt-get update",
             "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
-            "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/14.04/chef-server-core_12.8.0-1_amd64.deb",
-            "sudo dpkg -i /tmp/chef-server-core_12.8.0-1_amd64.deb",
+            "sudo wget -P /tmp --quiet https://packages.chef.io/files/stable/chef-server/12.12.0/ubuntu/16.04/chef-server-core_12.12.0-1_amd64.deb",
+            "sudo dpkg -i /tmp/chef-server-core_12.12.0-1_amd64.deb",
             "sudo hostname $(hostname -f)",
             "sudo su -c 'echo $(hostname) > /etc/hostname'",
             "sudo chef-server-ctl reconfigure",
-            "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/14.04/opscode-push-jobs-server_1.1.6-1_amd64.deb",
-            "sudo dpkg -i /tmp/opscode-push-jobs-server_1.1.6-1_amd64.deb",
-            "sudo chef-server-ctl reconfigure",
-            "sudo opscode-push-jobs-server-ctl reconfigure",
             "sudo chef-server-ctl user-create delivery Delivery User delivery-user@chef.io ChefDelivery2016 --filename /home/ubuntu/delivery-user.pem",
             "sudo chef-server-ctl org-create delivery 'Chef Delivery'  --filename /home/ubuntu/delivery-validator.pem -a delivery"
         ]
@@ -221,12 +224,12 @@ resource "aws_instance" "automate-server" {
             "sudo apt-get update",
             "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
-            "sudo wget -P /tmp https://packages.chef.io/stable/ubuntu/14.04/delivery_0.5.1-1_amd64.deb",
-            "sudo wget -P /home/ubuntu https://packages.chef.io/stable/ubuntu/12.04/chefdk_0.16.28-1_amd64.deb",
-            "sudo dpkg -i /tmp/delivery_0.5.1-1_amd64.deb",
+            "sudo wget -P /tmp --quiet https://packages.chef.io/files/stable/delivery/0.6.136/ubuntu/16.04/delivery_0.6.136-1_amd64.deb",
+            "sudo wget -P /home/ubuntu --quiet https://packages.chef.io/files/stable/chefdk/1.2.22/ubuntu/16.04/chefdk_1.2.22-1_amd64.deb",
+            "sudo dpkg -i /tmp/delivery_0.6.136-1_amd64.deb",
             "sudo hostname $(hostname -f)",
             "sudo su -c 'echo $(hostname) > /etc/hostname'",
-            "sudo delivery-ctl setup --license /home/ubuntu/delivery.license --key /home/ubuntu/delivery-user.pem --server-url https://${aws_instance.chef-server.private_dns}/organizations/delivery --fqdn ${self.private_dns} --enterprise delivery --configure --no-build-node"
+            "sudo automate-ctl setup --license /home/ubuntu/delivery.license --key /home/ubuntu/delivery-user.pem --server-url https://${aws_instance.chef-server.private_dns}/organizations/delivery --fqdn ${self.private_dns} --enterprise delivery --configure --no-build-node"
         ]
     }
 
@@ -235,9 +238,9 @@ resource "aws_instance" "automate-server" {
     }
 }
 
-resource "aws_instance" "automate-builder" {
+resource "aws_instance" "automate-job-runner" {
     depends_on = ["aws_instance.automate-server"]
-    count = "${var.builder_count}"
+    count = "${var.runner_count}"
     ami = "${lookup(var.ami, var.aws_region)}"
     instance_type = "t2.medium"
     subnet_id = "${var.subnet}"
@@ -251,7 +254,7 @@ resource "aws_instance" "automate-builder" {
     }
 
     tags {
-        Name = "${var.prefix}-${format("automate-builder-%02d", count.index + 1)}"
+        Name = "${var.prefix}-${format("automate-job-runner-%02d", count.index + 1)}"
     }
 
     connection {
@@ -272,6 +275,6 @@ resource "aws_instance" "automate-builder" {
     }
 
     provisioner "local-exec" {
-        command = "ssh -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.automate-server.private_ip} 'sudo delivery-ctl install-build-node --installer /home/ubuntu/chefdk_0.16.28-1_amd64.deb --fqdn ${self.private_dns} --username ubuntu --ssh-identity-file /home/ubuntu/ssh_key.pem --overwrite-registration --password noreallyused'"
+        command = "ssh -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.automate-server.private_ip} 'sudo automate-ctl install-runner ${self.private_dns} ubuntu --installer /home/ubuntu/chefdk_1.2.22-1_amd64.deb --ssh-identity-file /home/ubuntu/ssh_key.pem --yes'"
     }
 }
