@@ -32,10 +32,10 @@ variable "ami" {
     type = "map"
     description = "AMI ID to use for cluster instances"
     default = {
-        us-east-1 = "ami-6edd3078"
+        us-east-1 = "ami-f4cc1de2"
         us-east-2 = "ami-fcc19b99"
-        us-west-1 = "ami-539ac933"
-        us-west-2 = "ami-7c803d1c"
+        us-west-1 = "ami-16efb076"
+        us-west-2 = "ami-a58d0dc5"
     }
 }
 
@@ -160,12 +160,12 @@ resource "aws_instance" "chef-server" {
             "sudo apt-get update",
             "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
-            "sudo wget -P /tmp --quiet https://packages.chef.io/files/stable/chef-server/12.12.0/ubuntu/16.04/chef-server-core_12.12.0-1_amd64.deb",
-            "sudo dpkg -i /tmp/chef-server-core_12.12.0-1_amd64.deb",
+            "sudo wget -P /tmp --quiet https://packages.chef.io/files/stable/chef-server/12.14.0/ubuntu/16.04/chef-server-core_12.14.0-1_amd64.deb",
+            "sudo dpkg -i /tmp/chef-server-core_12.14.0-1_amd64.deb",
             "sudo hostname $(hostname -f)",
             "sudo su -c 'echo $(hostname) > /etc/hostname'",
             "sudo chef-server-ctl reconfigure",
-            "sudo chef-server-ctl user-create delivery Delivery User delivery-user@chef.io ChefDelivery2016 --filename /home/ubuntu/delivery-user.pem",
+            "sudo chef-server-ctl user-create delivery Delivery User delivery-user@chef.io ChefDelivery2017 --filename /home/ubuntu/delivery-user.pem",
             "sudo chef-server-ctl org-create delivery 'Chef Delivery'  --filename /home/ubuntu/delivery-validator.pem -a delivery"
         ]
     }
@@ -195,6 +195,7 @@ resource "aws_instance" "automate-server" {
 
     tags {
         Name = "${var.prefix}-automate-server"
+        X-Contact = "${var.contact}"
     }
 
     connection {
@@ -224,9 +225,9 @@ resource "aws_instance" "automate-server" {
             "sudo apt-get update",
             "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
-            "sudo wget -P /tmp --quiet https://packages.chef.io/files/stable/delivery/0.6.136/ubuntu/16.04/delivery_0.6.136-1_amd64.deb",
+            "sudo wget -P /tmp --quiet https://packages.chef.io/files/stable/automate/0.7.151/ubuntu/16.04/automate_0.7.151-1_amd64.deb",
             "sudo wget -P /home/ubuntu --quiet https://packages.chef.io/files/stable/chefdk/1.2.22/ubuntu/16.04/chefdk_1.2.22-1_amd64.deb",
-            "sudo dpkg -i /tmp/delivery_0.6.136-1_amd64.deb",
+            "sudo dpkg -i /tmp/automate_0.7.151-1_amd64.deb",
             "sudo hostname $(hostname -f)",
             "sudo su -c 'echo $(hostname) > /etc/hostname'",
             "sudo automate-ctl setup --license /home/ubuntu/delivery.license --key /home/ubuntu/delivery-user.pem --server-url https://${aws_instance.chef-server.private_dns}/organizations/delivery --fqdn ${self.private_dns} --enterprise delivery --configure --no-build-node"
@@ -255,6 +256,7 @@ resource "aws_instance" "automate-job-runner" {
 
     tags {
         Name = "${var.prefix}-${format("automate-job-runner-%02d", count.index + 1)}"
+        X-Contact = "${var.contact}"
     }
 
     connection {
