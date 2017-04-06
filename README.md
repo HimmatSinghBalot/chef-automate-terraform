@@ -14,9 +14,9 @@ A Terraform plan to build a fully functional Chef Automate cluster in AWS
 * Configure your terminal with AWS credentials
 	* https://www.terraform.io/docs/providers/aws/index.html
 * From your terminal, enter the terraform directory of this repo
-	* Edit the main.tfvars file and input your desired settings
-	* Run 'terraform plan -var-file=main.tfvars' to review what Terraform will do
-	* Run 'terraform apply --var-file=main.tfvars' to initiate the provisioning process
+	* Edit the terraform.tfvars file and input your desired settings
+	* Run 'terraform plan' to review what Terraform will do
+	* Run 'terraform apply' to initiate the provisioning process
 
 ## Post run:
 * You will find the Delivery user .pem key and the Chef Org validator .pem key in the directory you ran Terraform from.
