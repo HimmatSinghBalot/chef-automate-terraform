@@ -1,3 +1,39 @@
+variable "automate_package_name" {
+    type = "string"
+    description = "Name of Chef Automate Package to Install"
+    default = "automate_0.8.5-1_amd64.deb"
+}
+
+variable "automate_package_url" {
+    type = "string"
+    description = "URL to download Chef Automate Package"
+    default = "https://packages.chef.io/files/stable/automate/0.8.5/ubuntu/16.04/automate_0.8.5-1_amd64.deb"
+}
+
+variable "chef_server_package_name" {
+    type = "string"
+    description = "Name of Chef Server Package to Install"
+    default = "chef-server-core_12.15.7-1_amd64.deb"
+}
+
+variable "chef_server_package_url" {
+    type = "string"
+    description = "URL to download Chef Server Package"
+    default = "https://packages.chef.io/files/stable/chef-server/12.15.7/ubuntu/16.04/chef-server-core_12.15.7-1_amd64.deb"
+}
+
+variable "chefdk_package_name" {
+    type = "string"
+    description = "Name of ChefDK Package to Install"
+    default = "chefdk_1.4.3-1_amd64.deb"
+}
+
+variable "chefdk_package_url" {
+    type = "string"
+    description = "URL to download ChefDK Package"
+    default = "https://packages.chef.io/files/stable/chefdk/1.4.3/ubuntu/16.04/chefdk_1.4.3-1_amd64.deb"
+}
+
 variable "prefix" {
     type = "string"
     description = "Identifying string to prefix the name of generated AWS resources"
@@ -28,17 +64,6 @@ variable "cidrs_allowed" {
     description = "List of CIDR blocks allowed to access the automate cluster"
 }
 
-variable "ami" {
-    type = "map"
-    description = "AMI ID to use for cluster instances"
-    default = {
-        us-east-1 = "ami-f4cc1de2"
-        us-east-2 = "ami-fcc19b99"
-        us-west-1 = "ami-16efb076"
-        us-west-2 = "ami-a58d0dc5"
-    }
-}
-
 variable "key_name" {
     type = "string"
     description = "AWS SSH Key Name"
@@ -57,6 +82,7 @@ variable "runner_count" {
 variable "license_file" {
     type = "string"
     description = "Path to Chef Automate license file"
+    default = "./delivery.license"
 }
 
 provider "aws" {
@@ -72,7 +98,7 @@ resource "aws_security_group" "chef-automate" {
         Name = "${var.prefix}-chef-automate"
     }
 
-    # Allow instances within the security group 
+    # Allow instances within the security group
     # to communitcate with each other
     ingress {
         from_port = 0
@@ -119,7 +145,7 @@ resource "aws_security_group" "chef-automate" {
         to_port = 22
         protocol = "tcp"
         cidr_blocks = "${var.cidrs_allowed}"
-    }    
+    }
 
     egress {
         from_port = 0
@@ -129,9 +155,22 @@ resource "aws_security_group" "chef-automate" {
     }
 }
 
+data "aws_ami" "ubuntu_ami" {
+  most_recent = true
+  filter {
+    name   = "owner-id"
+    values = ["099720109477"]
+  }
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*"]
+  }
+}
+
 
 resource "aws_instance" "chef-server" {
-    ami = "${lookup(var.ami, var.aws_region)}"
+    ami = "${data.aws_ami.ubuntu_ami.id}"
     instance_type = "c4.xlarge"
     subnet_id = "${var.subnet}"
     vpc_security_group_ids = ["${aws_security_group.chef-automate.id}"]
@@ -158,10 +197,9 @@ resource "aws_instance" "chef-server" {
     provisioner "remote-exec" {
         inline = [
             "sudo apt-get update",
-            "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
-            "sudo wget -P /tmp --quiet https://packages.chef.io/files/stable/chef-server/12.14.0/ubuntu/16.04/chef-server-core_12.14.0-1_amd64.deb",
-            "sudo dpkg -i /tmp/chef-server-core_12.14.0-1_amd64.deb",
+            "sudo wget -P /tmp --quiet ${var.chef_server_package_url}",
+            "sudo dpkg -i /tmp/${var.chef_server_package_name}",
             "sudo hostname $(hostname -f)",
             "sudo su -c 'echo $(hostname) > /etc/hostname'",
             "sudo chef-server-ctl reconfigure",
@@ -181,7 +219,7 @@ resource "aws_instance" "chef-server" {
 
 resource "aws_instance" "automate-server" {
     depends_on = ["aws_instance.chef-server"]
-    ami = "${lookup(var.ami, var.aws_region)}"
+    ami = "${data.aws_ami.ubuntu_ami.id}"
     instance_type = "m4.xlarge"
     subnet_id = "${var.subnet}"
     vpc_security_group_ids = ["${aws_security_group.chef-automate.id}"]
@@ -223,11 +261,10 @@ resource "aws_instance" "automate-server" {
     provisioner "remote-exec" {
         inline = [
             "sudo apt-get update",
-            "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
-            "sudo wget -P /tmp --quiet https://packages.chef.io/files/stable/automate/0.7.151/ubuntu/16.04/automate_0.7.151-1_amd64.deb",
-            "sudo wget -P /home/ubuntu --quiet https://packages.chef.io/files/stable/chefdk/1.2.22/ubuntu/16.04/chefdk_1.2.22-1_amd64.deb",
-            "sudo dpkg -i /tmp/automate_0.7.151-1_amd64.deb",
+            "sudo wget -P /tmp --quiet ${var.automate_package_url}",
+            "sudo wget -P /home/ubuntu --quiet ${var.chefdk_package_url}",
+            "sudo dpkg -i /tmp/${var.automate_package_name}",
             "sudo hostname $(hostname -f)",
             "sudo su -c 'echo $(hostname) > /etc/hostname'",
             "sudo automate-ctl setup --license /home/ubuntu/delivery.license --key /home/ubuntu/delivery-user.pem --server-url https://${aws_instance.chef-server.private_dns}/organizations/delivery --fqdn ${self.private_dns} --enterprise delivery --configure --no-build-node"
@@ -242,7 +279,7 @@ resource "aws_instance" "automate-server" {
 resource "aws_instance" "automate-job-runner" {
     depends_on = ["aws_instance.automate-server"]
     count = "${var.runner_count}"
-    ami = "${lookup(var.ami, var.aws_region)}"
+    ami = "${data.aws_ami.ubuntu_ami.id}"
     instance_type = "t2.medium"
     subnet_id = "${var.subnet}"
     vpc_security_group_ids = ["${aws_security_group.chef-automate.id}"]
@@ -269,7 +306,6 @@ resource "aws_instance" "automate-job-runner" {
     provisioner "remote-exec" {
         inline = [
             "sudo apt-get update",
-            "sudo apt-get -y upgrade",
             "sudo apt-get -y install wget",
             "sudo hostname $(hostname -f)",
             "sudo su -c 'echo $(hostname) > /etc/hostname'"
@@ -277,6 +313,6 @@ resource "aws_instance" "automate-job-runner" {
     }
 
     provisioner "local-exec" {
-        command = "ssh -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.automate-server.private_ip} 'sudo automate-ctl install-runner ${self.private_dns} ubuntu --installer /home/ubuntu/chefdk_1.2.22-1_amd64.deb --ssh-identity-file /home/ubuntu/ssh_key.pem --yes'"
+        command = "ssh -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.key_path} ubuntu@${aws_instance.automate-server.private_ip} 'sudo automate-ctl install-runner ${self.private_dns} ubuntu --installer /home/ubuntu/${var.chefdk_package_name} --ssh-identity-file /home/ubuntu/ssh_key.pem --yes'"
     }
 }

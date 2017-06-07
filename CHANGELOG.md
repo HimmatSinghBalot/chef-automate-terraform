@@ -1,6 +1,13 @@
 # chef-automate-terraform CHANGELOG
 This file is used to list changes made in each version of the chef-automate-terraform plan.
 
+## 3.0.0 (2017-06-07)
+
+- Now using the aws_ami Terraform data source to select the latest available Ubuntu 16.04 AMI
+- Chef Automate, Server, and ChefDK package names/URLs are now variables
+- Set defaults for packages to Automate 0.8.5, Server 12.25.7, and ChefDK 1.4.3
+- Removed apt-get upgrade since we're pulling recently patched AMIs
+
 ## 2.1.0 (2017-04-06)
 
 - Updated to use latest official AWS Ubuntu 16.04 LTS AMIs
